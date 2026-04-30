@@ -4,6 +4,7 @@ from difflib import SequenceMatcher
 import hashlib
 import math
 import sys
+import time
 
 import pandas as pd
 import streamlit as st
@@ -78,74 +79,252 @@ st.set_page_config(
 st.markdown(
     """
 <style>
+    :root {
+        --bg-deep: #070711;
+        --bg-panel: rgba(15, 15, 35, .72);
+        --border-soft: rgba(255, 255, 255, .14);
+        --text-main: #f8fbff;
+        --text-muted: #b8c4dc;
+        --primary: #8b5cf6;
+        --primary-2: #6366f1;
+        --accent: #22d3ee;
+        --accent-2: #ec4899;
+        --success: #22c55e;
+        --danger: #fb7185;
+    }
+
     html, body, [data-testid="stAppViewContainer"] {
         background:
-            radial-gradient(circle at 18% 10%, rgba(34, 211, 238, .22), transparent 28%),
-            radial-gradient(circle at 84% 16%, rgba(16, 185, 129, .16), transparent 26%),
-            linear-gradient(135deg, #020617 0%, #07111f 52%, #020617 100%);
+            radial-gradient(circle at 12% 8%, rgba(139, 92, 246, .34), transparent 27%),
+            radial-gradient(circle at 88% 12%, rgba(236, 72, 153, .20), transparent 25%),
+            radial-gradient(circle at 50% 92%, rgba(34, 211, 238, .18), transparent 30%),
+            linear-gradient(135deg, #050510 0%, #0d1024 48%, #050510 100%);
+        color: var(--text-main);
     }
-    .block-container { max-width: 1180px; padding-top: 1.5rem; }
+
+    .block-container {
+        max-width: 1180px;
+        padding-top: 1.4rem;
+        padding-bottom: 3rem;
+    }
+
     [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #020617 0%, #0f172a 100%);
-        border-right: 1px solid rgba(34, 211, 238, .22);
+        background: rgba(5, 5, 16, .82);
+        backdrop-filter: blur(18px);
+        border-right: 1px solid rgba(139, 92, 246, .26);
     }
-    h1, h2, h3, label, p, .stMarkdown, .stCaption { color: #e5f9ff; }
+
+    h1, h2, h3, label, p, .stMarkdown, .stCaption {
+        color: var(--text-main);
+        letter-spacing: 0;
+    }
+
+    @keyframes fadeUp {
+        from { opacity: 0; transform: translateY(16px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes glowPulse {
+        0%, 100% { box-shadow: 0 0 24px rgba(139, 92, 246, .18); }
+        50% { box-shadow: 0 0 42px rgba(34, 211, 238, .24); }
+    }
+
     .hero {
         position: relative;
         overflow: hidden;
         background:
-            linear-gradient(135deg, rgba(15, 23, 42, .92) 0%, rgba(8, 47, 73, .88) 52%, rgba(20, 83, 45, .72) 100%);
-        color: white;
-        padding: 1.8rem 2rem;
-        border-radius: 14px;
-        margin-bottom: 1.2rem;
-        border: 1px solid rgba(34, 211, 238, .34);
-        box-shadow: 0 0 32px rgba(34, 211, 238, .13), inset 0 0 32px rgba(15, 23, 42, .35);
+            linear-gradient(135deg, rgba(17, 24, 39, .68) 0%, rgba(49, 46, 129, .42) 48%, rgba(131, 24, 67, .28) 100%);
+        padding: 3.1rem 2.2rem;
+        border-radius: 28px;
+        margin: .3rem 0 1.35rem 0;
+        text-align: center;
+        border: 1px solid var(--border-soft);
+        backdrop-filter: blur(22px);
+        animation: fadeUp .8s ease both, glowPulse 5s ease-in-out infinite;
     }
+
     .hero:after {
         content: "";
         position: absolute;
         inset: 0;
-        background-image: linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px),
-                          linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px);
-        background-size: 34px 34px;
-        mask-image: linear-gradient(90deg, black, transparent 75%);
+        background-image:
+            linear-gradient(rgba(255,255,255,.055) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,.055) 1px, transparent 1px);
+        background-size: 38px 38px;
+        mask-image: radial-gradient(circle at 50% 20%, black, transparent 72%);
         pointer-events: none;
     }
-    .hero h1 { margin: 0 0 .4rem 0; font-size: 2.15rem; letter-spacing: 0; }
-    .hero p { margin: 0; color: #bae6fd; max-width: 800px; }
+
+    .hero h1 {
+        position: relative;
+        z-index: 1;
+        margin: 0 0 .55rem 0;
+        font-size: clamp(2.35rem, 6vw, 4.75rem);
+        line-height: 1;
+        font-weight: 900;
+        background: linear-gradient(90deg, #ffffff 0%, #a78bfa 35%, #22d3ee 70%, #f9a8d4 100%);
+        -webkit-background-clip: text;
+        color: transparent;
+    }
+
+    .hero p {
+        position: relative;
+        z-index: 1;
+        margin: 0 auto;
+        color: var(--text-muted);
+        max-width: 680px;
+        font-size: 1.05rem;
+    }
+
     .cyber-pill {
+        position: relative;
+        z-index: 1;
         display: inline-block;
-        color: #67e8f9;
-        border: 1px solid rgba(103, 232, 249, .45);
+        color: #f0f9ff;
+        border: 1px solid rgba(34, 211, 238, .42);
         border-radius: 999px;
-        padding: .22rem .65rem;
+        padding: .38rem .85rem;
         font-size: .78rem;
-        margin-bottom: .65rem;
-        background: rgba(8, 47, 73, .4);
+        margin-bottom: .9rem;
+        background: rgba(99, 102, 241, .18);
+        backdrop-filter: blur(12px);
     }
-    .result {
-        border-radius: 8px;
-        padding: 1rem 1.15rem;
-        margin: .75rem 0 1rem 0;
-        border: 1px solid rgba(148, 163, 184, .28);
-        color: #e5f9ff;
-        box-shadow: 0 12px 28px rgba(0,0,0,.22);
+
+    .glass-panel {
+        background: var(--bg-panel);
+        border: 1px solid var(--border-soft);
+        border-radius: 24px;
+        padding: 1.25rem;
+        backdrop-filter: blur(18px);
+        box-shadow: 0 20px 60px rgba(0,0,0,.22);
+        animation: fadeUp .7s ease both;
     }
-    .duplicate { background: rgba(16, 185, 129, .16); border-color: rgba(16, 185, 129, .62); }
-    .not-duplicate { background: rgba(245, 158, 11, .16); border-color: rgba(245, 158, 11, .62); }
-    .small-note { color: #bae6fd; font-size: .95rem; }
-    div[data-testid="stMetric"] {
-        background: rgba(15, 23, 42, .72);
-        border: 1px solid rgba(34, 211, 238, .2);
-        border-radius: 10px;
-        padding: .75rem;
+
+    .section-kicker {
+        color: var(--accent);
+        font-size: .78rem;
+        font-weight: 800;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        margin-bottom: .15rem;
     }
-    .stButton > button, .stDownloadButton > button {
-        border: 1px solid rgba(34, 211, 238, .55);
-        background: linear-gradient(135deg, #0891b2 0%, #10b981 100%);
+
+    div[data-testid="stForm"] {
+        background: rgba(15, 15, 35, .66);
+        border: 1px solid rgba(255, 255, 255, .12);
+        border-radius: 24px;
+        padding: 1.3rem;
+        backdrop-filter: blur(18px);
+        box-shadow: 0 18px 54px rgba(0,0,0,.24);
+    }
+
+    textarea {
+        background: rgba(3, 7, 18, .72) !important;
+        color: #f8fbff !important;
+        border: 1px solid rgba(139, 92, 246, .28) !important;
+        border-radius: 18px !important;
+        transition: all .24s ease !important;
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,.03) !important;
+    }
+
+    textarea:focus {
+        border-color: rgba(34, 211, 238, .85) !important;
+        box-shadow: 0 0 0 3px rgba(34, 211, 238, .12), 0 0 24px rgba(139, 92, 246, .20) !important;
+    }
+
+    div[data-testid="stTabs"] button {
+        color: var(--text-muted);
+        border-radius: 999px;
+        transition: all .22s ease;
+    }
+
+    div[data-testid="stTabs"] button:hover {
         color: white;
-        font-weight: 700;
+        background: rgba(139, 92, 246, .13);
+    }
+
+    .result {
+        border-radius: 24px;
+        padding: 1.35rem;
+        margin: 1rem 0 1rem 0;
+        color: #f8fbff;
+        box-shadow: 0 22px 60px rgba(0,0,0,.28);
+        animation: fadeUp .55s ease both;
+    }
+
+    .duplicate {
+        background: linear-gradient(135deg, rgba(16, 185, 129, .24), rgba(15, 23, 42, .84));
+        border: 1px solid rgba(34, 197, 94, .62);
+    }
+
+    .not-duplicate {
+        background: linear-gradient(135deg, rgba(244, 63, 94, .24), rgba(15, 23, 42, .84));
+        border: 1px solid rgba(251, 113, 133, .62);
+    }
+
+    .result-topline {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .result-label {
+        font-size: 1.7rem;
+        font-weight: 900;
+        margin: 0;
+    }
+
+    .confidence {
+        font-size: 2.1rem;
+        font-weight: 900;
+    }
+
+    .small-note { color: var(--text-muted); font-size: .95rem; }
+
+    div[data-testid="stMetric"] {
+        background: rgba(15, 15, 35, .72);
+        border: 1px solid rgba(139, 92, 246, .22);
+        border-radius: 18px;
+        padding: 1rem;
+        backdrop-filter: blur(14px);
+        transition: transform .22s ease, border-color .22s ease, box-shadow .22s ease;
+    }
+
+    div[data-testid="stMetric"]:hover {
+        transform: translateY(-3px);
+        border-color: rgba(34, 211, 238, .48);
+        box-shadow: 0 14px 34px rgba(34, 211, 238, .10);
+    }
+
+    .stButton > button, .stDownloadButton > button {
+        border: 1px solid rgba(255,255,255,.18) !important;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--accent-2) 52%, var(--accent) 100%) !important;
+        color: white !important;
+        font-weight: 850 !important;
+        border-radius: 999px !important;
+        padding: .72rem 1rem !important;
+        box-shadow: 0 14px 34px rgba(139, 92, 246, .28) !important;
+        transition: transform .18s ease, box-shadow .18s ease, filter .18s ease !important;
+    }
+
+    .stButton > button:hover, .stDownloadButton > button:hover {
+        transform: scale(1.02);
+        filter: brightness(1.08);
+        box-shadow: 0 18px 46px rgba(34, 211, 238, .22) !important;
+    }
+
+    .stDataFrame {
+        border-radius: 18px;
+        overflow: hidden;
+        border: 1px solid rgba(255,255,255,.10);
+    }
+
+    @media (max-width: 760px) {
+        .hero { padding: 2rem 1.1rem; border-radius: 20px; }
+        .result-topline { align-items: flex-start; }
+        .confidence { font-size: 1.55rem; }
     }
 </style>
 """,
@@ -293,11 +472,22 @@ def validate_pair(question_1: str, question_2: str) -> list[str]:
 
 def render_result(result: dict, threshold: float) -> None:
     css_class = "duplicate" if result["label"] == "Duplicate" else "not-duplicate"
+    icon = "✅" if result["label"] == "Duplicate" else "⛔"
+    confidence = result["duplicate_probability"] * 100
     st.markdown(
         f"""
         <div class="result {css_class}">
-            <h3 style="margin:0 0 .25rem 0;">{result["label"]}</h3>
-            <div>Score: <b>{result["duplicate_probability"]:.3f}</b> | Threshold: <b>{threshold:.3f}</b></div>
+            <div class="result-topline">
+                <div>
+                    <div class="section-kicker">AI verdict</div>
+                    <div class="result-label">{icon} {result["label"]}</div>
+                    <div class="small-note">Decision threshold: <b>{threshold:.3f}</b></div>
+                </div>
+                <div>
+                    <div class="section-kicker">Confidence</div>
+                    <div class="confidence">{confidence:.1f}%</div>
+                </div>
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -325,36 +515,53 @@ def score_batch(frame: pd.DataFrame, threshold: float) -> pd.DataFrame:
 st.markdown(
     """
     <div class="hero">
-        <div class="cyber-pill">SEMANTIC MATCH ENGINE / CLOUD MODE</div>
+        <div class="cyber-pill">AI SIMILARITY INTELLIGENCE</div>
         <h1>Quora Duplicate AI</h1>
         <p>
-            A cloud-ready semantic question matcher by Mohammed Ghanim Siddiqui.
-            Compare question pairs with a recall-first similarity engine, inspect signals,
-            and score CSV uploads in a fast cyber-style dashboard.
+            Detect duplicate questions with a fast recall-first matching experience.
         </p>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
-st.sidebar.title("App Mode")
-st.sidebar.success("Cloud deployment mode")
-st.sidebar.caption("Recall-first lightweight semantic scoring")
+st.sidebar.markdown("### ⚡ Quora Duplicate AI")
+st.sidebar.caption("Premium cloud interface")
+st.sidebar.markdown("---")
+st.sidebar.markdown("#### 🎛️ Modes")
+st.sidebar.write("Single pair scoring")
+st.sidebar.write("CSV batch scoring")
+st.sidebar.markdown("---")
+st.sidebar.markdown("#### 🧠 Engine")
+st.sidebar.success("Recall-first matcher")
 st.sidebar.caption("Full transformer/XGBoost pipeline remains in the repository for local use.")
 
 tab_single, tab_batch, tab_about = st.tabs(["Single Prediction", "Batch Prediction", "About"])
 
 with tab_single:
-    st.subheader("Single Prediction")
-    selected_example = st.selectbox("Load example", list(EXAMPLES.keys()))
+    st.markdown('<div class="section-kicker">Live analyzer</div>', unsafe_allow_html=True)
+    st.subheader("Check Question Similarity")
+    selected_example = st.selectbox("Try an example", list(EXAMPLES.keys()))
     default_q1, default_q2 = EXAMPLES[selected_example]
 
     with st.form("single_form"):
         left, right = st.columns(2)
         with left:
-            question_1 = st.text_area("Question 1", value=default_q1, height=130, max_chars=MAX_QUESTION_CHARS)
+            question_1 = st.text_area(
+                "Question 1",
+                value=default_q1,
+                height=150,
+                max_chars=MAX_QUESTION_CHARS,
+                placeholder="Example: How can I learn Python quickly?",
+            )
         with right:
-            question_2 = st.text_area("Question 2", value=default_q2, height=130, max_chars=MAX_QUESTION_CHARS)
+            question_2 = st.text_area(
+                "Question 2",
+                value=default_q2,
+                height=150,
+                max_chars=MAX_QUESTION_CHARS,
+                placeholder="Example: What is the fastest way to learn Python?",
+            )
 
         sensitivity = st.radio(
             "Sensitivity mode",
@@ -368,7 +575,7 @@ with tab_single:
             "Strict": STRICT_THRESHOLD,
         }[sensitivity]
         threshold = st.slider("Duplicate threshold", 0.10, 0.90, default_threshold, 0.01)
-        submitted = st.form_submit_button("Compare questions", use_container_width=True)
+        submitted = st.form_submit_button("Check Similarity", use_container_width=True)
 
     if submitted:
         errors = validate_pair(question_1, question_2)
@@ -376,9 +583,12 @@ with tab_single:
             for error in errors:
                 st.error(error)
         else:
-            result = duplicate_score(question_1, question_2, threshold)
+            with st.spinner("AI is analyzing question intent..."):
+                time.sleep(0.45)
+                result = duplicate_score(question_1, question_2, threshold)
             render_result(result, threshold)
 
+            st.markdown('<div class="section-kicker">Similarity signals</div>', unsafe_allow_html=True)
             metrics = st.columns(4)
             metrics[0].metric("Word Similarity", f"{result['word_similarity']:.3f}")
             metrics[1].metric("Char Similarity", f"{result['char_similarity']:.3f}")
@@ -386,6 +596,7 @@ with tab_single:
             metrics[3].metric("Content Overlap", f"{result['content_overlap']:.3f}")
 
 with tab_batch:
+    st.markdown('<div class="section-kicker">Bulk intelligence</div>', unsafe_allow_html=True)
     st.subheader("Batch Prediction")
     st.markdown('<div class="small-note">Upload a CSV containing `question1` and `question2` columns.</div>', unsafe_allow_html=True)
 
@@ -426,9 +637,12 @@ with tab_batch:
                 st.success(f"Loaded {len(frame):,} rows")
                 st.dataframe(frame.head(min(20, len(frame))), use_container_width=True)
 
-                if st.button("Run batch prediction", use_container_width=True):
-                    output = score_batch(frame, batch_threshold)
+                if st.button("Run Batch Analysis", use_container_width=True):
+                    with st.spinner("AI is scanning every question pair..."):
+                        time.sleep(0.45)
+                        output = score_batch(frame, batch_threshold)
                     duplicate_count = int((output["label"] == "Duplicate").sum())
+                    st.markdown('<div class="section-kicker">Batch summary</div>', unsafe_allow_html=True)
                     cols = st.columns(3)
                     cols[0].metric("Rows", f"{len(output):,}")
                     cols[1].metric("Duplicates", f"{duplicate_count:,}")
@@ -443,6 +657,7 @@ with tab_batch:
                     )
 
 with tab_about:
+    st.markdown('<div class="section-kicker">Product brief</div>', unsafe_allow_html=True)
     st.subheader("About this deployment")
     st.write(
         "This public Streamlit deployment uses a lightweight semantic scoring engine "
