@@ -1,5 +1,6 @@
 from pathlib import Path
 from collections import Counter
+from difflib import SequenceMatcher
 import hashlib
 import math
 import sys
@@ -21,6 +22,7 @@ from quora_duplicate_detector.text_features import (
 
 MAX_QUESTION_CHARS = 1000
 MAX_BATCH_ROWS = 5000
+DEFAULT_THRESHOLD = 0.42
 REQUIRED_COLUMNS = {"question1", "question2"}
 
 EXAMPLES = {
@@ -86,9 +88,16 @@ def word_ngrams(text: str) -> list[str]:
     return unigrams + bigrams
 
 
-def hashed_vector(text: str, buckets: int = 4096) -> Counter:
+def char_ngrams(text: str, n: int = 3) -> list[str]:
+    normalized = normalize_text(text).replace(" ", "")
+    if len(normalized) < n:
+        return [normalized] if normalized else []
+    return [normalized[index : index + n] for index in range(len(normalized) - n + 1)]
+
+
+def hashed_vector(terms: list[str], buckets: int = 4096) -> Counter:
     vector = Counter()
-    for term in word_ngrams(text):
+    for term in terms:
         digest = hashlib.md5(term.encode("utf-8")).hexdigest()
         bucket = int(digest, 16) % buckets
         vector[bucket] += 1.0
@@ -109,8 +118,12 @@ def normalized_dot(left: Counter, right: Counter) -> float:
     return dot_product / (left_norm * right_norm)
 
 
-def cosine_similarity(question_1: str, question_2: str) -> float:
-    return normalized_dot(hashed_vector(question_1), hashed_vector(question_2))
+def word_vector_similarity(question_1: str, question_2: str) -> float:
+    return normalized_dot(hashed_vector(word_ngrams(question_1)), hashed_vector(word_ngrams(question_2)))
+
+
+def char_vector_similarity(question_1: str, question_2: str) -> float:
+    return normalized_dot(hashed_vector(char_ngrams(question_1)), hashed_vector(char_ngrams(question_2)))
 
 
 def length_similarity(question_1: str, question_2: str) -> float:
@@ -119,26 +132,36 @@ def length_similarity(question_1: str, question_2: str) -> float:
     return min(left, right) / max(left, right)
 
 
-def duplicate_score(question_1: str, question_2: str) -> dict:
-    semantic = cosine_similarity(question_1, question_2)
+def sequence_similarity(question_1: str, question_2: str) -> float:
+    return SequenceMatcher(None, normalize_text(question_1), normalize_text(question_2)).ratio()
+
+
+def duplicate_score(question_1: str, question_2: str, threshold: float) -> dict:
+    word_similarity = word_vector_similarity(question_1, question_2)
+    char_similarity = char_vector_similarity(question_1, question_2)
+    sequence_score = sequence_similarity(question_1, question_2)
     jaccard = jaccard_similarity(question_1, question_2)
     overlap = token_overlap_ratio(question_1, question_2)
     length_score = length_similarity(question_1, question_2)
     exact_match = float(normalize_text(question_1) == normalize_text(question_2))
 
     score = (
-        0.45 * semantic
+        0.25 * word_similarity
+        + 0.22 * char_similarity
+        + 0.18 * sequence_score
         + 0.25 * overlap
-        + 0.15 * jaccard
-        + 0.10 * length_score
+        + 0.06 * jaccard
+        + 0.04 * length_score
         + 0.05 * exact_match
     )
     score = max(0.0, min(1.0, float(score)))
 
     return {
         "duplicate_probability": score,
-        "label": "Duplicate" if score >= 0.50 else "Not Duplicate",
-        "semantic_similarity": semantic,
+        "label": "Duplicate" if score >= threshold else "Not Duplicate",
+        "word_similarity": word_similarity,
+        "char_similarity": char_similarity,
+        "sequence_similarity": sequence_score,
         "jaccard_similarity": jaccard,
         "token_overlap_ratio": overlap,
         "length_similarity": length_score,
@@ -154,13 +177,13 @@ def validate_pair(question_1: str, question_2: str) -> list[str]:
     return errors
 
 
-def render_result(result: dict) -> None:
+def render_result(result: dict, threshold: float) -> None:
     css_class = "duplicate" if result["label"] == "Duplicate" else "not-duplicate"
     st.markdown(
         f"""
         <div class="result {css_class}">
             <h3 style="margin:0 0 .25rem 0;">{result["label"]}</h3>
-            <div>Score: <b>{result["duplicate_probability"]:.3f}</b> | Threshold: <b>0.500</b></div>
+            <div>Score: <b>{result["duplicate_probability"]:.3f}</b> | Threshold: <b>{threshold:.3f}</b></div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -168,15 +191,17 @@ def render_result(result: dict) -> None:
     st.progress(result["duplicate_probability"])
 
 
-def score_batch(frame: pd.DataFrame) -> pd.DataFrame:
+def score_batch(frame: pd.DataFrame, threshold: float) -> pd.DataFrame:
     result = frame.copy()
     scores = [
-        duplicate_score(str(row.question1), str(row.question2))
+        duplicate_score(str(row.question1), str(row.question2), threshold)
         for row in result.itertuples(index=False)
     ]
     result["duplicate_probability"] = [item["duplicate_probability"] for item in scores]
     result["label"] = [item["label"] for item in scores]
-    result["semantic_similarity"] = [item["semantic_similarity"] for item in scores]
+    result["word_similarity"] = [item["word_similarity"] for item in scores]
+    result["char_similarity"] = [item["char_similarity"] for item in scores]
+    result["sequence_similarity"] = [item["sequence_similarity"] for item in scores]
     result["jaccard_similarity"] = [item["jaccard_similarity"] for item in scores]
     result["token_overlap_ratio"] = [item["token_overlap_ratio"] for item in scores]
     return result
@@ -214,6 +239,14 @@ with tab_single:
         with right:
             question_2 = st.text_area("Question 2", value=default_q2, height=130, max_chars=MAX_QUESTION_CHARS)
 
+        threshold = st.slider(
+            "Duplicate threshold",
+            min_value=0.10,
+            max_value=0.90,
+            value=DEFAULT_THRESHOLD,
+            step=0.01,
+            help="Lower values mark more pairs as duplicates. Higher values make the app stricter.",
+        )
         submitted = st.form_submit_button("Compare questions", use_container_width=True)
 
     if submitted:
@@ -222,20 +255,27 @@ with tab_single:
             for error in errors:
                 st.error(error)
         else:
-            result = duplicate_score(question_1, question_2)
-            render_result(result)
+            result = duplicate_score(question_1, question_2, threshold)
+            render_result(result, threshold)
 
             metrics = st.columns(4)
-            metrics[0].metric("Semantic Similarity", f"{result['semantic_similarity']:.3f}")
-            metrics[1].metric("Jaccard", f"{result['jaccard_similarity']:.3f}")
-            metrics[2].metric("Token Overlap", f"{result['token_overlap_ratio']:.3f}")
-            metrics[3].metric("Length Similarity", f"{result['length_similarity']:.3f}")
+            metrics[0].metric("Word Similarity", f"{result['word_similarity']:.3f}")
+            metrics[1].metric("Char Similarity", f"{result['char_similarity']:.3f}")
+            metrics[2].metric("Sequence Similarity", f"{result['sequence_similarity']:.3f}")
+            metrics[3].metric("Token Overlap", f"{result['token_overlap_ratio']:.3f}")
 
 with tab_batch:
     st.subheader("Batch Prediction")
     st.markdown('<div class="small-note">Upload a CSV containing `question1` and `question2` columns.</div>', unsafe_allow_html=True)
 
     uploaded = st.file_uploader("Upload CSV", type=["csv"])
+    batch_threshold = st.slider(
+        "Batch duplicate threshold",
+        min_value=0.10,
+        max_value=0.90,
+        value=DEFAULT_THRESHOLD,
+        step=0.01,
+    )
     if uploaded is not None:
         try:
             frame = pd.read_csv(uploaded)
@@ -256,7 +296,7 @@ with tab_batch:
                 st.dataframe(frame.head(min(20, len(frame))), use_container_width=True)
 
                 if st.button("Run batch prediction", use_container_width=True):
-                    output = score_batch(frame)
+                    output = score_batch(frame, batch_threshold)
                     duplicate_count = int((output["label"] == "Duplicate").sum())
                     cols = st.columns(3)
                     cols[0].metric("Rows", f"{len(output):,}")
