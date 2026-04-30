@@ -1,10 +1,11 @@
 from pathlib import Path
+from collections import Counter
+import hashlib
+import math
 import sys
 
-import numpy as np
 import pandas as pd
 import streamlit as st
-from sklearn.feature_extraction.text import HashingVectorizer
 
 APP_DIR = Path(__file__).resolve().parent
 if str(APP_DIR) not in sys.path:
@@ -78,20 +79,38 @@ st.markdown(
 )
 
 
-@st.cache_resource
-def vectorizer() -> HashingVectorizer:
-    return HashingVectorizer(
-        n_features=4096,
-        alternate_sign=False,
-        norm="l2",
-        ngram_range=(1, 2),
-        lowercase=True,
-    )
+def word_ngrams(text: str) -> list[str]:
+    tokens = normalize_text(text).split()
+    unigrams = tokens
+    bigrams = [f"{left} {right}" for left, right in zip(tokens, tokens[1:])]
+    return unigrams + bigrams
+
+
+def hashed_vector(text: str, buckets: int = 4096) -> Counter:
+    vector = Counter()
+    for term in word_ngrams(text):
+        digest = hashlib.md5(term.encode("utf-8")).hexdigest()
+        bucket = int(digest, 16) % buckets
+        vector[bucket] += 1.0
+    return vector
+
+
+def normalized_dot(left: Counter, right: Counter) -> float:
+    if not left or not right:
+        return 0.0
+
+    dot_product = sum(value * right.get(key, 0.0) for key, value in left.items())
+    left_norm = math.sqrt(sum(value * value for value in left.values()))
+    right_norm = math.sqrt(sum(value * value for value in right.values()))
+
+    if left_norm == 0.0 or right_norm == 0.0:
+        return 0.0
+
+    return dot_product / (left_norm * right_norm)
 
 
 def cosine_similarity(question_1: str, question_2: str) -> float:
-    matrix = vectorizer().transform([question_1, question_2])
-    return float(matrix[0].multiply(matrix[1]).sum())
+    return normalized_dot(hashed_vector(question_1), hashed_vector(question_2))
 
 
 def length_similarity(question_1: str, question_2: str) -> float:
@@ -114,7 +133,7 @@ def duplicate_score(question_1: str, question_2: str) -> dict:
         + 0.10 * length_score
         + 0.05 * exact_match
     )
-    score = float(np.clip(score, 0.0, 1.0))
+    score = max(0.0, min(1.0, float(score)))
 
     return {
         "duplicate_probability": score,
