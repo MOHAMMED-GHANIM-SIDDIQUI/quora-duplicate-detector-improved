@@ -225,6 +225,13 @@ Then open:
 http://localhost:8501
 ```
 
+For the full local transformer/XGBoost app, install the full dependency set and run:
+
+```bash
+pip install -r streamlit_interface/requirements-full.txt
+streamlit run streamlit_interface/full_app.py
+```
+
 ---
 
 ## Batch CSV Format
@@ -290,4 +297,3 @@ Profile summary:
 - The included model artifact is a `joblib`-serialized XGBoost classifier.
 - Keep dependency versions pinned to avoid model-loading incompatibilities.
 - For production, prefer model registry storage, API serving, monitoring, and native XGBoost serialization.
-
