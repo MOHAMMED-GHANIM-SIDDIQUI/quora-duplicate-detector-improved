@@ -1,267 +1,293 @@
-# 🔎 Quora Duplicate Question Detection
+# Quora Duplicate Question Detector
 
-A production-grade NLP project that detects whether two questions are semantically similar (duplicates) using **Sentence Transformers, feature engineering, and machine learning models**.
+![Python](https://img.shields.io/badge/Python-3.13-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![Streamlit](https://img.shields.io/badge/Streamlit-App-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)
+![NLP](https://img.shields.io/badge/NLP-Sentence%20Transformers-0F766E?style=for-the-badge)
+![XGBoost](https://img.shields.io/badge/Model-XGBoost-1F2937?style=for-the-badge)
+![Status](https://img.shields.io/badge/Status-Improved%20Version-success?style=for-the-badge)
 
----
+An improved end-to-end NLP application that detects whether two questions are duplicates using sentence embeddings, engineered similarity features, a trained XGBoost classifier, and an upgraded Streamlit interface.
 
-## 🚀 Project Overview
-
-Duplicate questions are a major challenge in platforms like Quora, StackOverflow, and customer support systems. This project builds a **full end-to-end machine learning pipeline** to identify duplicate questions by combining:
-
-- Semantic understanding (transformer embeddings)
-- Lexical similarity features
-- Supervised ML models
-- Threshold tuning for optimal classification
+Built and improved by **Mohammed Ghanim Siddiqui**.
 
 ---
 
-## 🎯 Business Problem
+## Project Snapshot
 
-Duplicate questions lead to:
-- Poor user experience
-- Redundant content
-- Inefficient search systems
-
-### 💡 Solution Impact
-
-- Improves **search relevance**
-- Reduces **duplicate content**
-- Enhances **knowledge retrieval**
-- Optimizes **user engagement**
-
-### 🏢 Real-world Applications
-
-- Quora duplicate detection
-- FAQ deduplication
-- Customer support ticket clustering
-- Search engine optimization
+| Area | Details |
+| --- | --- |
+| Problem | Detect whether two questions have the same meaning |
+| Use cases | Quora duplicate detection, FAQ deduplication, support-ticket clustering, semantic search |
+| Core model | XGBoost classifier over 777 pairwise NLP features |
+| Embeddings | `all-MiniLM-L6-v2` SentenceTransformer |
+| Modern NLP option | BGE sentence embeddings and optional Quora cross-encoder scoring |
+| Interface | Streamlit web app with single, batch, and modern NLP modes |
+| Best threshold | `0.40` |
+| Test F1 | `0.8041` |
 
 ---
 
-## 🧠 Solution Approach
+## Demo Flow
 
-### 1. Data Understanding
+```mermaid
+flowchart LR
+    A["Question 1"] --> C["Text + Embedding Pipeline"]
+    B["Question 2"] --> C
+    C --> D["Pairwise NLP Features"]
+    D --> E["XGBoost Classifier"]
+    E --> F["Duplicate Probability"]
+    F --> G["Threshold Decision"]
+    G --> H["Duplicate / Not Duplicate"]
+```
 
-Input dataset contains:
+Example:
 
-- `question1`
-- `question2`
-- `is_duplicate` (target)
-
----
-
-### 2. Text Representation
-
-We use transformer-based embeddings:
-
-SentenceTransformer("all-MiniLM-L6-v2")
-
-- 384-dimensional vectors
-- Captures **semantic meaning**
-- Context-aware (better than TF-IDF)
+| Question 1 | Question 2 | Output |
+| --- | --- | --- |
+| How can I learn Python quickly? | What is the fastest way to learn Python? | Duplicate |
 
 ---
 
-### 3. Feature Engineering
+## What Makes This Version Better
 
-#### 🔹 Semantic Features
-- Cosine similarity between embeddings
+This repository is an improved version of the original project. The codebase was refactored, the Streamlit app was redesigned, and modern NLP scoring options were added.
 
-#### 🔹 Lexical Features
-- Word count (q1, q2)
-- Character count (q1, q2)
-- Word count difference
-- Character count difference
+| Original | Improved Version |
+| --- | --- |
+| One large Streamlit file | Modular Python package |
+| Loose dependencies | Version-pinned requirements |
+| Basic UI | Cleaner app with validation and clearer outputs |
+| Runtime path issues | Artifact paths resolved from project root |
+| Duplicate embedding calls | Reused feature outputs |
+| Notebook-heavy workflow | Added repeatable v2 training pipeline |
+| Only saved XGBoost path | Added modern embedding and cross-encoder comparison |
+
+---
+
+## Application Features
+
+### Single Prediction
+
+Score one pair of questions using the saved trained classifier.
+
+- Duplicate probability
+- Final label
+- Applied threshold
+- Confidence band
+- Cosine similarity
 - Jaccard similarity
-- Token overlap ratio
+- Token overlap details
 
-#### 🔹 Embedding-Based Features
-- Absolute difference: |e1 - e2|
-- Element-wise product: e1 * e2
+### Modern NLP
 
----
+Compare questions using transformer-native semantic similarity.
 
-### 4. Model Training
+- Fast bi-encoder embedding similarity
+- Optional cross-encoder pair classification
+- Embedding distance
+- Lexical similarity diagnostics
 
-Models evaluated:
+### Batch Prediction
 
-- Logistic Regression
-- Random Forest
-- XGBoost (best performing model)
+Upload a CSV with:
 
----
+```text
+question1,question2
+```
 
-### 5. Threshold Tuning
-
-Instead of default 0.5:
-
-- Threshold optimized on validation set
-- Improves F1-score
-- Balances Precision and Recall
+The app validates the file, scores all rows, summarizes duplicate rate, and lets you download predictions.
 
 ---
 
-## 📊 Evaluation Metrics
+## Project Structure
 
-- Accuracy
-- Precision
-- Recall
-- F1 Score
-- ROC-AUC
-
----
-
-## 🏗️ Project Pipeline
-
-Raw Text  
-↓  
-Text Cleaning  
-↓  
-Sentence Embeddings  
-↓  
-Feature Engineering  
-↓  
-Model Training  
-↓  
-Threshold Tuning  
-↓  
-Final Model  
-↓  
-Deployment (Streamlit)
-
----
-
-## 💻 Streamlit Application
-
-An interactive web application for real-time predictions.
-
-### Features
-
-- 🔍 Single prediction (manual input)
-- 📂 Batch prediction (CSV upload)
-- 📊 Probability score visualization
-- 📈 Feature-level insights
+```text
+quora_duplicate_detector_improved/
+|
+|-- README.md
+|-- ML_PIPELINE_V2.md
+|-- MODERN_NLP_UPGRADE.md
+|-- artifacts/
+|   |-- metadata.json
+|   `-- quora_duplicate_classifier.joblib
+|
+|-- streamlit_interface/
+|   |-- app.py
+|   |-- requirements.txt
+|   `-- quora_duplicate_detector/
+|       |-- config.py
+|       |-- paths.py
+|       |-- text_features.py
+|       |-- features.py
+|       |-- inference.py
+|       |-- model_assets.py
+|       |-- modern_nlp.py
+|       |-- features_v2.py
+|       |-- evaluation.py
+|       `-- training_v2.py
+|
+|-- Training_phase_with_GPU/
+`-- *_Project_Quora_Duplicate_Question_Detection.ipynb
+```
 
 ---
 
-## 📁 Project Structure
+## Machine Learning Pipeline
 
-Project--Quora-Duplicate-Question-Detection-with-Streamlit/  
-│  
-├── app.py                      # Streamlit application  
-├── requirements.txt  
-├── README.md  
-│  
-├── artifacts/  
-│   ├── quora_duplicate_classifier.joblib  
-│   └── metadata.json  
-│  
-├── Training_phase_with_GPU/  
-│   └── Project_Quora_Duplicate_Question_Detection.ipynb  
+The saved production path uses pairwise feature engineering:
 
----
+```mermaid
+flowchart TD
+    A["Raw Questions"] --> B["Text Cleaning"]
+    B --> C["SentenceTransformer Embeddings"]
+    C --> D["Cosine Similarity"]
+    C --> E["Absolute Embedding Difference"]
+    C --> F["Element-wise Embedding Product"]
+    B --> G["Lexical Features"]
+    D --> H["777 Feature Vector"]
+    E --> H
+    F --> H
+    G --> H
+    H --> I["XGBoost"]
+    I --> J["Probability"]
+    J --> K["Threshold = 0.40"]
+    K --> L["Final Label"]
+```
 
-## ⚙️ Installation
+Feature groups:
 
-### 1. Clone Repository
-
-git clone https://github.com/BIRJUNG/-Project--Quora-Duplicate-Question-Detection-with-streamlit.git
-cd -Project--Quora-Duplicate-Question-Detection-with-streamlit
-
----
-
-### 2. Create Virtual Environment
-
-python3 -m venv venv  
-source venv/bin/activate  
-
----
-
-### 3. Install Dependencies
-
-pip install -r requirements.txt  
+| Feature Group | Count |
+| --- | ---: |
+| Cosine similarity | 1 |
+| Lexical features | 8 |
+| Absolute embedding difference | 384 |
+| Element-wise embedding product | 384 |
+| Total | 777 |
 
 ---
 
-### 4. Run Application
+## Model Metrics
 
-streamlit run app.py  
-
----
-
-## 🧪 Example
-
-Input:
-
-Q1: How can I learn Python quickly?  
-Q2: What is the fastest way to learn Python?  
-
-Output:
-
-Prediction: Duplicate  
-Probability: 0.91  
+| Metric | Score |
+| --- | ---: |
+| Accuracy | 0.8402 |
+| Precision | 0.7347 |
+| Recall | 0.8879 |
+| F1 Score | 0.8041 |
+| ROC-AUC | 0.9269 |
 
 ---
 
-## 🧠 Key Learnings
+## Tech Stack
 
-- Difference between **vectorization vs embeddings**
-- Importance of **semantic similarity in NLP**
-- Feature engineering for text data
-- Threshold tuning vs default classification
-- Model comparison and selection
-- Deployment challenges (XGBoost, environment issues)
-
----
-
-## ⚠️ Deployment Note (Important)
-
-XGBoost models saved with joblib may cause compatibility issues.
-
-Recommended approach:
-
-model.save_model("model.json")  
-
-Then load using:
-
-model.load_model("model.json")  
+| Category | Tools |
+| --- | --- |
+| Language | Python |
+| App | Streamlit |
+| NLP | Sentence Transformers, HuggingFace Transformers |
+| ML | Scikit-learn, XGBoost |
+| Data | Pandas, NumPy |
+| Training utilities | Threshold tuning, model benchmarking, v2 feature schema |
 
 ---
 
-## 🔥 Future Improvements
+## Setup
 
-- Use **cross-encoder models** for higher accuracy
-- Implement **Siamese Neural Networks**
-- Deploy with **FastAPI + Docker**
-- Add **real-time API endpoints**
-- Integrate **vector databases (FAISS)**
+Clone the repository:
+
+```bash
+git clone https://github.com/MOHAMMED-GHANIM-SIDDIQUI/quora-duplicate-detector-improved.git
+cd quora-duplicate-detector-improved
+```
+
+Create and activate a virtual environment:
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+```
+
+Install dependencies:
+
+```bash
+pip install -r streamlit_interface/requirements.txt
+```
+
+Run the app:
+
+```bash
+streamlit run streamlit_interface/app.py
+```
+
+Then open:
+
+```text
+http://localhost:8501
+```
+
+---
+
+## Batch CSV Format
+
+```csv
+question1,question2
+How can I learn Python quickly?,What is the fastest way to learn Python?
+How do I learn machine learning?,What are the best tourist places in Nepal?
+```
 
 ---
 
-## 📌 Tech Stack
+## Improved V2 Training Pipeline
 
-- Python  
-- Scikit-learn  
-- XGBoost  
-- Sentence Transformers  
-- Pandas / NumPy  
-- Streamlit  
+This repository also includes a cleaner retraining path:
+
+```bash
+cd streamlit_interface
+python -m quora_duplicate_detector.training_v2 ^
+  --data-path ..\data\quora.csv ^
+  --output-dir ..\artifacts_v2
+```
+
+The v2 pipeline adds:
+
+- richer lexical features
+- L1 and L2 embedding distances
+- feature schema tracking
+- model leaderboard output
+- validation-based threshold tuning
+
+See [ML_PIPELINE_V2.md](ML_PIPELINE_V2.md) for details.
+
+---
+
+## Modern NLP Upgrade
+
+The Modern NLP tab adds:
+
+- `BAAI/bge-small-en-v1.5` for semantic embedding similarity
+- `cross-encoder/quora-distilroberta-base` for pair-level duplicate scoring
+
+See [MODERN_NLP_UPGRADE.md](MODERN_NLP_UPGRADE.md) for details.
 
 ---
 
-## 👨‍💻 Author
+## Author
 
-**Birjung Thapa**  
-Master’s in Data Science  
-University of Colorado Boulder  
+**Mohammed Ghanim Siddiqui**  
+Data Analyst | Python | SQL | Machine Learning | Tableau | Streamlit  
+New Delhi, India  
+Email: `mgs18112001@gmail.com`  
+GitHub: [MOHAMMED-GHANIM-SIDDIQUI](https://github.com/MOHAMMED-GHANIM-SIDDIQUI)
 
----
+Profile summary:
 
-## ⭐ Support
-
-If you found this project useful:
-
-⭐ Star the repository  
-📢 Share it with others  
+> Detail-oriented data analyst skilled in SQL, Advanced Excel, Python, machine learning, Tableau, and dashboard reporting, with experience in NLP, RAG pipelines, Streamlit apps, and analytics mentoring.
 
 ---
+
+## Notes
+
+- The included model artifact is a `joblib`-serialized XGBoost classifier.
+- Keep dependency versions pinned to avoid model-loading incompatibilities.
+- For production, prefer model registry storage, API serving, monitoring, and native XGBoost serialization.
+
