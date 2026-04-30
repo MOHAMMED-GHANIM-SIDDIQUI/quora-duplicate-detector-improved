@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Union
 
 import joblib
-from sentence_transformers import CrossEncoder, SentenceTransformer
 
 from .config import DEFAULT_EMBEDDING_MODEL, DEFAULT_MODEL_NAME, DEFAULT_THRESHOLD
 
@@ -19,11 +18,15 @@ def load_classifier(model_path: Union[str, Path]):
     return joblib.load(model_path)
 
 
-def load_embedder(model_name: str) -> SentenceTransformer:
+def load_embedder(model_name: str):
+    from sentence_transformers import SentenceTransformer
+
     return SentenceTransformer(model_name)
 
 
-def load_cross_encoder(model_name: str) -> CrossEncoder:
+def load_cross_encoder(model_name: str):
+    from sentence_transformers import CrossEncoder
+
     return CrossEncoder(model_name)
 
 

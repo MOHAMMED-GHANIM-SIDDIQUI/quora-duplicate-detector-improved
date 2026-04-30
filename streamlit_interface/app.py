@@ -175,7 +175,7 @@ def cached_cross_encoder(model_name: str):
     return load_cross_encoder(model_name)
 
 
-def load_runtime_assets() -> tuple[dict, object, object, Path, Path]:
+def load_runtime_assets() -> tuple[dict, object, Path, Path]:
     model_path, metadata_path = artifact_paths(default_artifact_dir())
 
     if not model_path.exists():
@@ -186,8 +186,7 @@ def load_runtime_assets() -> tuple[dict, object, object, Path, Path]:
     metadata = cached_metadata(str(metadata_path))
     settings = model_settings(metadata)
     classifier = cached_classifier(str(model_path))
-    embedder = cached_embedder(settings["embedding_model_name"])
-    return settings, classifier, embedder, model_path, metadata_path
+    return settings, classifier, model_path, metadata_path
 
 
 def render_metric_card(title: str, value: str, font_size: str = "1.35rem") -> None:
@@ -296,7 +295,7 @@ st.sidebar.markdown("**Artifact folder**")
 st.sidebar.code(str(default_artifact_dir()))
 
 try:
-    settings, classifier, embedder, model_path, metadata_path = load_runtime_assets()
+    settings, classifier, model_path, metadata_path = load_runtime_assets()
 except Exception as error:
     settings = {
         "embedding_model_name": DEFAULT_EMBEDDING_MODEL,
@@ -306,7 +305,6 @@ except Exception as error:
         "feature_summary": {},
     }
     classifier = None
-    embedder = None
     st.sidebar.error(f"Artifact loading error:\n{error}")
 
 
@@ -323,7 +321,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-if classifier is None or embedder is None:
+if classifier is None:
     st.error(
         "Artifacts were not loaded. Place `quora_duplicate_classifier.joblib` "
         "and `metadata.json` inside the repo-level `artifacts/` folder."
@@ -403,7 +401,7 @@ with tab_single:
                 result = predict_single_pair(
                     question_1=question_1,
                     question_2=question_2,
-                    embedder=embedder,
+                    embedder=cached_embedder(embedding_model_name),
                     classifier=classifier,
                     threshold=custom_threshold,
                 )
@@ -596,7 +594,7 @@ with tab_batch:
                 with st.spinner("Encoding text and generating predictions..."):
                     result_df = predict_batch(
                         batch_df,
-                        embedder=embedder,
+                        embedder=cached_embedder(embedding_model_name),
                         classifier=classifier,
                         threshold=best_threshold,
                     )
