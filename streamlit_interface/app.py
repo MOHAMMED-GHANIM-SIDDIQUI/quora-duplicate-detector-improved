@@ -23,7 +23,29 @@ from quora_duplicate_detector.text_features import (
 MAX_QUESTION_CHARS = 1000
 MAX_BATCH_ROWS = 5000
 DEFAULT_THRESHOLD = 0.42
+RECALL_THRESHOLD = 0.30
+BALANCED_THRESHOLD = 0.38
+STRICT_THRESHOLD = 0.52
 REQUIRED_COLUMNS = {"question1", "question2"}
+STOPWORDS = {
+    "a", "an", "and", "are", "as", "be", "best", "can", "do", "does", "for",
+    "from", "get", "how", "i", "in", "is", "it", "my", "of", "on", "or",
+    "should", "the", "to", "way", "what", "when", "where", "which", "who",
+    "why", "with", "you", "your",
+}
+SYNONYM_GROUPS = {
+    "learn": {"learn", "study", "master", "understand"},
+    "fast": {"fast", "quick", "quickly", "rapid", "rapidly", "faster", "fastest"},
+    "prepare": {"prepare", "ready", "practice", "prep"},
+    "job": {"job", "career", "interview", "interviews"},
+    "good": {"good", "great", "best", "better"},
+    "improve": {"improve", "increase", "enhance", "boost"},
+}
+SYNONYM_LOOKUP = {
+    alias: canonical
+    for canonical, aliases in SYNONYM_GROUPS.items()
+    for alias in aliases
+}
 
 EXAMPLES = {
     "Python duplicate": (
@@ -56,25 +78,75 @@ st.set_page_config(
 st.markdown(
     """
 <style>
-    .block-container { max-width: 1120px; padding-top: 1.5rem; }
-    .hero {
-        background: linear-gradient(135deg, #0f172a 0%, #155e75 56%, #14532d 100%);
-        color: white;
-        padding: 1.5rem 1.7rem;
-        border-radius: 10px;
-        margin-bottom: 1rem;
+    html, body, [data-testid="stAppViewContainer"] {
+        background:
+            radial-gradient(circle at 18% 10%, rgba(34, 211, 238, .22), transparent 28%),
+            radial-gradient(circle at 84% 16%, rgba(16, 185, 129, .16), transparent 26%),
+            linear-gradient(135deg, #020617 0%, #07111f 52%, #020617 100%);
     }
-    .hero h1 { margin: 0 0 .35rem 0; font-size: 2rem; }
-    .hero p { margin: 0; color: #dbeafe; max-width: 760px; }
+    .block-container { max-width: 1180px; padding-top: 1.5rem; }
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #020617 0%, #0f172a 100%);
+        border-right: 1px solid rgba(34, 211, 238, .22);
+    }
+    h1, h2, h3, label, p, .stMarkdown, .stCaption { color: #e5f9ff; }
+    .hero {
+        position: relative;
+        overflow: hidden;
+        background:
+            linear-gradient(135deg, rgba(15, 23, 42, .92) 0%, rgba(8, 47, 73, .88) 52%, rgba(20, 83, 45, .72) 100%);
+        color: white;
+        padding: 1.8rem 2rem;
+        border-radius: 14px;
+        margin-bottom: 1.2rem;
+        border: 1px solid rgba(34, 211, 238, .34);
+        box-shadow: 0 0 32px rgba(34, 211, 238, .13), inset 0 0 32px rgba(15, 23, 42, .35);
+    }
+    .hero:after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image: linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px),
+                          linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px);
+        background-size: 34px 34px;
+        mask-image: linear-gradient(90deg, black, transparent 75%);
+        pointer-events: none;
+    }
+    .hero h1 { margin: 0 0 .4rem 0; font-size: 2.15rem; letter-spacing: 0; }
+    .hero p { margin: 0; color: #bae6fd; max-width: 800px; }
+    .cyber-pill {
+        display: inline-block;
+        color: #67e8f9;
+        border: 1px solid rgba(103, 232, 249, .45);
+        border-radius: 999px;
+        padding: .22rem .65rem;
+        font-size: .78rem;
+        margin-bottom: .65rem;
+        background: rgba(8, 47, 73, .4);
+    }
     .result {
         border-radius: 8px;
         padding: 1rem 1.15rem;
         margin: .75rem 0 1rem 0;
         border: 1px solid rgba(148, 163, 184, .28);
+        color: #e5f9ff;
+        box-shadow: 0 12px 28px rgba(0,0,0,.22);
     }
-    .duplicate { background: rgba(16, 185, 129, .13); border-color: rgba(16, 185, 129, .45); }
-    .not-duplicate { background: rgba(245, 158, 11, .14); border-color: rgba(245, 158, 11, .45); }
-    .small-note { color: #475569; font-size: .95rem; }
+    .duplicate { background: rgba(16, 185, 129, .16); border-color: rgba(16, 185, 129, .62); }
+    .not-duplicate { background: rgba(245, 158, 11, .16); border-color: rgba(245, 158, 11, .62); }
+    .small-note { color: #bae6fd; font-size: .95rem; }
+    div[data-testid="stMetric"] {
+        background: rgba(15, 23, 42, .72);
+        border: 1px solid rgba(34, 211, 238, .2);
+        border-radius: 10px;
+        padding: .75rem;
+    }
+    .stButton > button, .stDownloadButton > button {
+        border: 1px solid rgba(34, 211, 238, .55);
+        background: linear-gradient(135deg, #0891b2 0%, #10b981 100%);
+        color: white;
+        font-weight: 700;
+    }
 </style>
 """,
     unsafe_allow_html=True,
@@ -82,10 +154,37 @@ st.markdown(
 
 
 def word_ngrams(text: str) -> list[str]:
-    tokens = normalize_text(text).split()
+    tokens = canonical_tokens(text)
     unigrams = tokens
     bigrams = [f"{left} {right}" for left, right in zip(tokens, tokens[1:])]
     return unigrams + bigrams
+
+
+def canonical_tokens(text: str, keep_stopwords: bool = False) -> list[str]:
+    tokens = normalize_text(text).split()
+    normalized = []
+    for token in tokens:
+        token = SYNONYM_LOOKUP.get(token, token)
+        if keep_stopwords or token not in STOPWORDS:
+            normalized.append(token)
+    return normalized
+
+
+def content_overlap(question_1: str, question_2: str) -> float:
+    left = set(canonical_tokens(question_1))
+    right = set(canonical_tokens(question_2))
+    if not left or not right:
+        return 0.0
+    return len(left.intersection(right)) / min(len(left), len(right))
+
+
+def content_jaccard(question_1: str, question_2: str) -> float:
+    left = set(canonical_tokens(question_1))
+    right = set(canonical_tokens(question_2))
+    union = left.union(right)
+    if not union:
+        return 0.0
+    return len(left.intersection(right)) / len(union)
 
 
 def char_ngrams(text: str, n: int = 3) -> list[str]:
@@ -142,19 +241,32 @@ def duplicate_score(question_1: str, question_2: str, threshold: float) -> dict:
     sequence_score = sequence_similarity(question_1, question_2)
     jaccard = jaccard_similarity(question_1, question_2)
     overlap = token_overlap_ratio(question_1, question_2)
+    content_token_overlap = content_overlap(question_1, question_2)
+    content_token_jaccard = content_jaccard(question_1, question_2)
     length_score = length_similarity(question_1, question_2)
     exact_match = float(normalize_text(question_1) == normalize_text(question_2))
 
     score = (
-        0.25 * word_similarity
-        + 0.22 * char_similarity
-        + 0.18 * sequence_score
-        + 0.25 * overlap
-        + 0.06 * jaccard
-        + 0.04 * length_score
+        0.18 * word_similarity
+        + 0.18 * char_similarity
+        + 0.16 * sequence_score
+        + 0.17 * overlap
+        + 0.20 * content_token_overlap
+        + 0.06 * content_token_jaccard
+        + 0.03 * jaccard
+        + 0.02 * length_score
         + 0.05 * exact_match
     )
     score = max(0.0, min(1.0, float(score)))
+
+    recall_rule = (
+        content_token_overlap >= 0.50
+        and (char_similarity >= 0.32 or sequence_score >= 0.34 or word_similarity >= 0.25)
+    ) or (
+        overlap >= 0.45 and char_similarity >= 0.28
+    )
+    if recall_rule:
+        score = max(score, threshold + 0.03)
 
     return {
         "duplicate_probability": score,
@@ -164,6 +276,8 @@ def duplicate_score(question_1: str, question_2: str, threshold: float) -> dict:
         "sequence_similarity": sequence_score,
         "jaccard_similarity": jaccard,
         "token_overlap_ratio": overlap,
+        "content_overlap": content_token_overlap,
+        "content_jaccard": content_token_jaccard,
         "length_similarity": length_score,
     }
 
@@ -204,16 +318,19 @@ def score_batch(frame: pd.DataFrame, threshold: float) -> pd.DataFrame:
     result["sequence_similarity"] = [item["sequence_similarity"] for item in scores]
     result["jaccard_similarity"] = [item["jaccard_similarity"] for item in scores]
     result["token_overlap_ratio"] = [item["token_overlap_ratio"] for item in scores]
+    result["content_overlap"] = [item["content_overlap"] for item in scores]
     return result
 
 
 st.markdown(
     """
     <div class="hero">
+        <div class="cyber-pill">SEMANTIC MATCH ENGINE / CLOUD MODE</div>
         <h1>Quora Duplicate AI</h1>
         <p>
             A cloud-ready semantic question matcher by Mohammed Ghanim Siddiqui.
-            Compare question pairs, inspect similarity signals, and score CSV uploads.
+            Compare question pairs with a recall-first similarity engine, inspect signals,
+            and score CSV uploads in a fast cyber-style dashboard.
         </p>
     </div>
     """,
@@ -222,7 +339,7 @@ st.markdown(
 
 st.sidebar.title("App Mode")
 st.sidebar.success("Cloud deployment mode")
-st.sidebar.caption("Fast startup, lightweight semantic scoring")
+st.sidebar.caption("Recall-first lightweight semantic scoring")
 st.sidebar.caption("Full transformer/XGBoost pipeline remains in the repository for local use.")
 
 tab_single, tab_batch, tab_about = st.tabs(["Single Prediction", "Batch Prediction", "About"])
@@ -239,14 +356,18 @@ with tab_single:
         with right:
             question_2 = st.text_area("Question 2", value=default_q2, height=130, max_chars=MAX_QUESTION_CHARS)
 
-        threshold = st.slider(
-            "Duplicate threshold",
-            min_value=0.10,
-            max_value=0.90,
-            value=DEFAULT_THRESHOLD,
-            step=0.01,
-            help="Lower values mark more pairs as duplicates. Higher values make the app stricter.",
+        sensitivity = st.radio(
+            "Sensitivity mode",
+            ["High Recall", "Balanced", "Strict"],
+            horizontal=True,
+            help="High Recall catches more duplicates. Strict reduces false positives.",
         )
+        default_threshold = {
+            "High Recall": RECALL_THRESHOLD,
+            "Balanced": BALANCED_THRESHOLD,
+            "Strict": STRICT_THRESHOLD,
+        }[sensitivity]
+        threshold = st.slider("Duplicate threshold", 0.10, 0.90, default_threshold, 0.01)
         submitted = st.form_submit_button("Compare questions", use_container_width=True)
 
     if submitted:
@@ -262,18 +383,28 @@ with tab_single:
             metrics[0].metric("Word Similarity", f"{result['word_similarity']:.3f}")
             metrics[1].metric("Char Similarity", f"{result['char_similarity']:.3f}")
             metrics[2].metric("Sequence Similarity", f"{result['sequence_similarity']:.3f}")
-            metrics[3].metric("Token Overlap", f"{result['token_overlap_ratio']:.3f}")
+            metrics[3].metric("Content Overlap", f"{result['content_overlap']:.3f}")
 
 with tab_batch:
     st.subheader("Batch Prediction")
     st.markdown('<div class="small-note">Upload a CSV containing `question1` and `question2` columns.</div>', unsafe_allow_html=True)
 
     uploaded = st.file_uploader("Upload CSV", type=["csv"])
+    batch_mode = st.radio(
+        "Batch sensitivity",
+        ["High Recall", "Balanced", "Strict"],
+        horizontal=True,
+    )
+    batch_default = {
+        "High Recall": RECALL_THRESHOLD,
+        "Balanced": BALANCED_THRESHOLD,
+        "Strict": STRICT_THRESHOLD,
+    }[batch_mode]
     batch_threshold = st.slider(
         "Batch duplicate threshold",
         min_value=0.10,
         max_value=0.90,
-        value=DEFAULT_THRESHOLD,
+        value=batch_default,
         step=0.01,
     )
     if uploaded is not None:
