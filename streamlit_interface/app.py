@@ -176,6 +176,21 @@ st.markdown(
         font-size: 1.05rem;
     }
 
+    .creator-line {
+        position: relative;
+        z-index: 1;
+        margin-top: 1rem;
+        color: #f8fbff;
+        font-weight: 800;
+        font-size: .98rem;
+    }
+
+    .creator-line span {
+        background: linear-gradient(90deg, #a78bfa, #22d3ee, #f9a8d4);
+        -webkit-background-clip: text;
+        color: transparent;
+    }
+
     .cyber-pill {
         position: relative;
         z-index: 1;
@@ -520,12 +535,14 @@ st.markdown(
         <p>
             Detect duplicate questions with a fast recall-first matching experience.
         </p>
+        <div class="creator-line">Built by <span>Mohammed Ghanim Siddiqui</span></div>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
 st.sidebar.markdown("### ⚡ Quora Duplicate AI")
+st.sidebar.markdown("**By Mohammed Ghanim Siddiqui**")
 st.sidebar.caption("Premium cloud interface")
 st.sidebar.markdown("---")
 st.sidebar.markdown("#### 🎛️ Modes")
